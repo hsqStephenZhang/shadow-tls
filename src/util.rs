@@ -166,13 +166,9 @@ impl Hmac {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) fn xor_slice(data: &mut [u8], key: &[u8]) {
-    if 32 % key.len() == 0 {
-        xor_slice_simd(data, key);
-    } else {
-        xor_slice_legacy(data, key);
-    }
+    xor_slice_legacy(data, key);
 }
 
 #[allow(unused)]
