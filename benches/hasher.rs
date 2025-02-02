@@ -111,6 +111,16 @@ fn hmac_blake2b_simple_benchmark2(c: &mut Criterion) {
     });
 }
 
+fn hmac_blake2s_simd_benchmark1(c: &mut Criterion) {
+    c.bench_function("HMAC-BLAKE2S-SIMD-SMALL", |b| {
+        b.iter(|| {
+            let mut hmac = blake2s_simd::Params::new();
+            hmac.key(KEY);
+            let _res = hmac.hash(SMALL_DATA);
+        })
+    });
+}
+
 fn hmac_blake2s_simd_benchmark2(c: &mut Criterion) {
     c.bench_function("HMAC-BLAKE2S-SIMD-LARGE", |b| {
         b.iter(|| {
@@ -132,6 +142,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     hmac_blake2s_simple_benchmark2(c);
     hmac_blake2b_simple_benchmark1(c);
     hmac_blake2b_simple_benchmark2(c);
+    hmac_blake2s_simd_benchmark1(c);
     hmac_blake2s_simd_benchmark2(c);
 }
 
