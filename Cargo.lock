@@ -1615,7 +1615,3 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[patch.unused]]
-name = "sha1"
-version = "0.11.0-pre.4"

@@ -43,6 +43,3 @@ blake3 = { version = "1.5.5", features = ["traits-preview"] }
 [[bench]]
 name = "hasher"
 harness = false
-
-[patch.crates-io]
-sha1 = { path = "/workspaces/work/hashes/sha1" }
