@@ -38,8 +38,11 @@ opt-level = 3
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-blake2s_simd = "1.0.2"
+blake3 = { version = "1.5.5", features = ["traits-preview"] }
 
 [[bench]]
 name = "hasher"
 harness = false
+
+[patch.crates-io]
+sha1 = { path = "/workspaces/work/hashes/sha1" }
