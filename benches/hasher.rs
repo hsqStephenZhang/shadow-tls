@@ -1,108 +1,71 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use blake2::{Blake2b512, Blake2s256};
+use blake3::Hasher as Blake3;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use hmac::{Mac, SimpleHmac};
+use rand::prelude::*;
 use sha1::Sha1;
 
 const KEY: &[u8] = b"supersecretkey";
-const SMALL_DATA: &[u8] = b"Hello, World!";
-const LARGE_DATA: &[u8] = include_bytes!("../docs/protocol-v3-en.md");
+const KIB: usize = 1024;
 
-fn hmac_sha1_benchmark1(c: &mut Criterion) {
-    c.bench_function("HMAC-SHA1-SMALL", |b| {
-        b.iter(|| {
-            let mut mac =
-                SimpleHmac::<Sha1>::new_from_slice(KEY).expect("HMAC can take key of any size");
-            mac.update(SMALL_DATA);
-            let _result = mac.finalize();
-        })
-    });
+trait BenchName {
+    fn name() -> &'static str;
 }
 
-fn hmac_sha1_benchmark2(c: &mut Criterion) {
-    c.bench_function("HMAC-SHA1-LARGE", |b| {
-        b.iter(|| {
-            let mut mac =
-                SimpleHmac::<Sha1>::new_from_slice(KEY).expect("HMAC can take key of any size");
-            mac.update(LARGE_DATA);
-            let _result = mac.finalize();
-        })
-    });
+macro_rules! impl_bench_name {
+    ($name:ident) => {
+        impl BenchName for $name {
+            fn name() -> &'static str {
+                stringify!($name)
+            }
+        }
+    };
 }
 
-fn hmac_blake2s_simple_benchmark1(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE2s-SIMPLE-SMALL", |b| {
-        b.iter(|| {
-            type HmacBlake2s = hmac::SimpleHmac<blake2::Blake2s256>;
-            let mut hmac = HmacBlake2s::new_from_slice(KEY).unwrap();
-            hmac.update(SMALL_DATA);
-            let _res = hmac.finalize();
-        })
-    });
-}
+impl_bench_name!(Sha1);
+impl_bench_name!(Blake2s256);
+impl_bench_name!(Blake2b512);
+impl_bench_name!(Blake3);
 
-fn hmac_blake2s_simple_benchmark2(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE2s-SIMPLE-LARGE", |b| {
-        b.iter(|| {
-            type HmacBlake2s = hmac::SimpleHmac<blake2::Blake2s256>;
-            let mut hmac = HmacBlake2s::new_from_slice(KEY).unwrap();
-            hmac.update(LARGE_DATA);
-            let _res = hmac.finalize();
-        })
-    });
-}
+fn hmac_benchmark<D: hmac::digest::Digest + hmac::digest::core_api::BlockSizeUser + BenchName>(
+    c: &mut Criterion,
+) {
+    let sizes = [1, 2, 4, 8, 16, 32, 64]
+        .into_iter()
+        .map(|x| x * KIB)
+        .collect::<Vec<_>>();
+    let throughputs = sizes.iter().map(|size| Throughput::Bytes(*size as u64));
 
-fn hmac_blake2b_simple_benchmark1(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE2b-SIMPLE-SMALL", |b| {
-        b.iter(|| {
-            type HmacBlake2b = hmac::SimpleHmac<blake2::Blake2b512>;
-            let mut hmac = HmacBlake2b::new_from_slice(KEY).unwrap();
-            hmac.update(SMALL_DATA);
-            let _res = hmac.finalize();
-        })
-    });
-}
-
-fn hmac_blake2b_simple_benchmark2(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE2b-SIMPLE-LARGE", |b| {
-        b.iter(|| {
-            type HmacBlake2b = hmac::SimpleHmac<blake2::Blake2b512>;
-            let mut hmac = HmacBlake2b::new_from_slice(KEY).unwrap();
-            hmac.update(LARGE_DATA);
-            let _res = hmac.finalize();
-        })
-    });
-}
-
-fn hmac_blake3_benchmark1(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE3-SIMPLE-SMALL", |b| {
-        b.iter(|| {
-            type HmacBlake3 = hmac::SimpleHmac<blake3::Hasher>;
-            let mut hmac = HmacBlake3::new_from_slice(KEY).unwrap();
-            hmac.update(SMALL_DATA);
-            let _res = hmac.finalize();
-        })
-    });
-}
-
-fn hmac_blake3_benchmark2(c: &mut Criterion) {
-    c.bench_function("HMAC-BLAKE3-SIMPLE-LARGE", |b| {
-        b.iter(|| {
-            type HmacBlake3 = hmac::SimpleHmac<blake3::Hasher>;
-            let mut hmac = HmacBlake3::new_from_slice(KEY).unwrap();
-            hmac.update(LARGE_DATA);
-            let _res = hmac.finalize();
-        })
-    });
+    let hmac_type = D::name();
+    let mut group = c.benchmark_group(hmac_type);
+    group.sample_size(1000);
+    for (size, throughput) in sizes.iter().zip(throughputs) {
+        group.throughput(throughput);
+        let id = BenchmarkId::new(format!("HMAC-{}", hmac_type), size);
+        group.bench_with_input(id, size, |b, _| {
+            b.iter_batched(
+                || {
+                    let mut input = vec![0u8; *size];
+                    thread_rng().fill_bytes(&mut input);
+                    input
+                },
+                |input| {
+                    let mut mac = SimpleHmac::<D>::new_from_slice(KEY)
+                        .expect("HMAC can take key of any size");
+                    mac.update(&input);
+                    let _result = mac.finalize();
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+    }
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    hmac_sha1_benchmark1(c);
-    hmac_sha1_benchmark2(c);
-    hmac_blake3_benchmark1(c);
-    hmac_blake3_benchmark2(c);
-    hmac_blake2s_simple_benchmark1(c);
-    hmac_blake2s_simple_benchmark2(c);
-    hmac_blake2b_simple_benchmark1(c);
-    hmac_blake2b_simple_benchmark2(c);
+    hmac_benchmark::<Sha1>(c);
+    hmac_benchmark::<Blake2s256>(c);
+    hmac_benchmark::<Blake2b512>(c);
+    hmac_benchmark::<Blake3>(c);
 }
 
 criterion_group!(benches, criterion_benchmark);
